@@ -68,6 +68,7 @@
 #include "usblangids.hpp"
 #include "byteorder.hpp"
 #include "ustring.hpp"
+#include "utils.hpp"
 
 namespace usbplusplus {
 
@@ -112,8 +113,7 @@ constexpr unsigned D(unsigned N, unsigned val = 1) { return val << N; }
 /* Table 9-2. Format of Setup Data											*/
 enum class DataTransferDirection_t : uint8_t {
 	Host_to_device	= 0,
-	Device_to_Host	= D(7),
-	__mask 			= D(7)
+	Device_to_Host	= D(7)
 };
 
 /* Table 9-2. Format of Setup Data											*/
@@ -121,9 +121,7 @@ enum class RequestType_t : uint8_t {
 	Standard		= D(5, 0),
 	Class			= D(5, 1),
 	Vendor			= D(5, 2),
-	__mask			= D(6) | D(5)
 };
-
 
 /* Table 9-2. Format of Setup Data											*/
 enum class Recipient_t : uint8_t {
@@ -131,7 +129,6 @@ enum class Recipient_t : uint8_t {
 	Interface		= D(0, 1),
 	Endpoint		= D(0, 2),
 	Other			= D(0, 3),
-	__mask			= D(3) | D(2) | D(1) | D(0)
 };
 
 /* Table 9-4. Standard Request Codes										*/
@@ -213,6 +210,7 @@ enum class ConfigurationCharacteristics_t : uint8_t { //TODO _t
 	Self_powered  = D(6),
 	Remote_Wakeup = D(5)
 };
+DEFINE_ENUM_CLASS_OR(ConfigurationCharacteristics_t);
 
 /* Table 9-13. Standard Endpoint Descriptor									*/
 enum class EndpointDirection_t : uint8_t {
@@ -298,71 +296,6 @@ struct index<T, First, List...> {
 using string_getter = const uint8_t* (*)();
 using mstring_getter = const uint8_t* (*)(uint8_t, LanguageIdentifier);
 
-template<typename T>
-inline constexpr T operator_or(T a, T b) {
-	using type = typename intN_t<sizeof(T),unsigned>::type;
-	return static_cast<T>(static_cast<type>(a) | static_cast<type>(b));
-}
-
-template<typename T>
-inline constexpr T operator_and(T a, T b) {
-	using type = typename intN_t<sizeof(T),unsigned>::type;
-	return static_cast<T>(static_cast<type>(a) & static_cast<type>(b));
-}
-
-template<typename T, typename O>
-inline constexpr typename intN_t<sizeof(T),unsigned>::type
-_or(T a, O b) {
-	using type = typename intN_t<sizeof(T),unsigned>::type;
-	return static_cast<type>(a) | static_cast<type>(b);
-}
-
-template<typename T, typename O>
-inline constexpr typename intN_t<sizeof(T),unsigned>::type
-_and(T a, O b) {
-	using type = typename intN_t<sizeof(T),unsigned>::type;
-	return static_cast<type>(a) & static_cast<type>(b);
-}
-
-
-}
-
-/*****************************************************************************/
-/*   AND, OR operators														 */
-/*****************************************************************************/
-
-inline constexpr DataTransferDirection_t operator&(DataTransferDirection_t a,
-		DataTransferDirection_t b) {
-	return detail::operator_and(a,b);
-}
-
-inline constexpr DataTransferDirection_t operator|(DataTransferDirection_t a,
-		DataTransferDirection_t b) {
-	return detail::operator_or(a,b);
-}
-
-inline constexpr RequestType_t operator&(RequestType_t a,	RequestType_t b) {
-	return detail::operator_and(a,b);
-}
-
-inline constexpr RequestType_t operator|(RequestType_t a,	RequestType_t b) {
-	return detail::operator_or(a,b);
-}
-
-inline constexpr Recipient_t operator&(Recipient_t a,	Recipient_t b) {
-	return detail::operator_and(a,b);
-}
-
-inline constexpr Recipient_t operator|(Recipient_t a,	Recipient_t b) {
-	return detail::operator_or(a,b);
-}
-
-inline constexpr TransferType_t operator&(TransferType_t a, TransferType_t b) {
-	return detail::operator_and(a,b);
-}
-
-inline constexpr TransferType_t operator|(TransferType_t a, TransferType_t b) {
-	return detail::operator_or(a,b);
 }
 
 /*****************************************************************************/
@@ -373,21 +306,7 @@ class __attribute__((__packed__))
 RequestType : protected detail::field<1> {
 	constexpr RequestType(DataTransferDirection_t direction,
 			RequestType_t requesttype, Recipient_t recipient) :
-		field<1>(detail::_and(direction, DataTransferDirection_t::__mask) |
-				detail::_and(requesttype, RequestType_t::__mask ) |
-				detail::_and(recipient, Recipient_t::__mask)) {
-	}
-	constexpr DataTransferDirection_t dataTransferDirection() const {
-		return static_cast<DataTransferDirection_t>(
-				get() & static_cast<type>(DataTransferDirection_t::__mask));
-	}
-	constexpr RequestType_t requestType() const {
-		return static_cast<RequestType_t>(
-				get() & static_cast<type>(RequestType_t::__mask));
-	}
-	constexpr Recipient_t recipient() const {
-		return static_cast<Recipient_t>(
-				get() & static_cast<type>(Recipient_t::__mask));
+		field<1>(direction | requesttype | recipient) {
 	}
 };
 
@@ -813,7 +732,7 @@ Configuration {
 	}
 	static constexpr uint16_t totallength() { return sizeof(self); }
 	static constexpr uint8_t length() {	return sizeof(Configuration<Empty>); }
-	const uint8_t* ptr() const { return bLength.ptr(); }
+	const uint8_t* ptr() const { return (uint8_t*)this; }
 
 	/* ------------------------------------------------*/
 	Length<self> 				bLength;
@@ -1057,10 +976,7 @@ Endpoint {
 	Attributes : private detail::field<1> {
 		constexpr Attributes(TransferType_t transfer, SynchronizationType_t sync,
 				UsageType_t usage = UsageType_t::Data_endpoint)
-		  : detail::field<1>(
-				 detail::_and(transfer, TransferType_t::__mask       )  |
-				 detail::_and(sync,     SynchronizationType_t::__mask)  |
-				 detail::_and(usage,    UsageType_t::__mask          )) {}
+		  : detail::field<1>(transfer |sync | usage) {}
 		constexpr Attributes(TransferType_t transferType)
 		  : detail::field<1>(static_cast<type>(transferType) & 0b11) {}
 	};
